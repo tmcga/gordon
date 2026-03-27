@@ -32,6 +32,7 @@ from gordon.portfolio.tracker import PortfolioTracker
 from gordon.risk.metrics import compute_metrics
 
 if TYPE_CHECKING:
+    from gordon.risk.manager import RiskManager
     from gordon.strategy.base import Strategy
 
 logger = structlog.get_logger()
@@ -100,12 +101,14 @@ class BacktestEngine:
         initial_cash: Decimal = Decimal("100000"),
         slippage: SlippageModel | None = None,
         commission: CommissionModel | None = None,
+        risk_manager: RiskManager | None = None,
     ) -> None:
         self._strategies = strategies
         self._data = data
         self._initial_cash = initial_cash
         self._slippage = slippage
         self._commission = commission
+        self._risk_manager = risk_manager
 
     # ------------------------------------------------------------------
     # Public API
@@ -176,7 +179,7 @@ class BacktestEngine:
 
             # f. Convert signals to orders and submit
             for sig in signals:
-                order = signal_to_order(sig, portfolio, close_price)
+                order = signal_to_order(sig, portfolio, close_price, self._risk_manager)
                 if order is None:
                     continue
                 fill = await broker.submit_order(order)

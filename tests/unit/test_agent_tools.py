@@ -15,8 +15,8 @@ from gordon.portfolio.tracker import PortfolioTracker
 # ---------------------------------------------------------------------------
 
 
-def test_tools_list_has_seven_tools() -> None:
-    assert len(TOOLS) == 7
+def test_tools_list_has_eight_tools() -> None:
+    assert len(TOOLS) == 8
 
 
 @pytest.mark.parametrize("tool", TOOLS, ids=[t["name"] for t in TOOLS])

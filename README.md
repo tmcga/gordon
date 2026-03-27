@@ -3,7 +3,7 @@
 **AI-powered trading agent with backtesting, risk management, and portfolio optimization.**
 
 [![CI](https://github.com/tmcga/gordon/actions/workflows/ci.yml/badge.svg)](https://github.com/tmcga/gordon/actions/workflows/ci.yml)
-[![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
+[![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Code style: ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
 
@@ -16,11 +16,11 @@ Gordon is an open-source Python trading agent that combines quantitative finance
 ## Key Features
 
 - **Event-driven architecture** -- backtest, paper, and live modes share a single execution pipeline
-- **Strategy framework** -- write a complete strategy in roughly 20 lines of Python
-- **Backtesting engine** -- full performance metrics including Sharpe ratio, Sortino ratio, and max drawdown
+- **Strategy framework** -- built-in templates let you write a complete strategy in roughly 20 lines of Python
+- **Backtesting engine** -- full performance metrics including Sharpe, Sortino, max drawdown, and more
 - **Multi-asset support** -- crypto via CCXT (100+ exchanges) and US equities via Alpaca
-- **AI agent powered by Claude** -- analyze markets, backtest strategies, optimize parameters, then trade
-- **Risk management pipeline** -- position limits, drawdown guards, and Kelly criterion sizing
+- **AI agent powered by Claude** -- analyze markets, backtest strategies, optimize portfolios, and trade
+- **Risk management pipeline** -- 6 configurable guards and 3 position sizing methods (fixed, volatility, Kelly)
 - **Portfolio optimization** -- mean-variance, risk parity, and Black-Litterman models
 - **Type-safe** -- Pydantic models throughout, mypy strict mode
 
@@ -37,6 +37,14 @@ Fetch historical data and run a backtest:
 
 ```bash
 gordon data fetch AAPL --start 2023-01-01 --end 2024-01-01
+gordon backtest --strategy sma_crossover --symbols AAPL --start 2023-01-01
+```
+
+Launch the AI agent:
+
+```bash
+export ANTHROPIC_API_KEY=sk-...
+gordon agent
 ```
 
 ## Architecture
@@ -61,32 +69,31 @@ src/gordon/
     risk/           Risk management pipeline and guards
     portfolio/      Portfolio optimization (mean-variance, risk parity, Black-Litterman)
     agent/          AI agent integration (Claude-powered analysis and trading)
+    persistence/    Trade and snapshot persistence (SQLite)
     web/            Web dashboard routes (FastAPI)
     cli.py          Command-line interface
     config.py       Configuration management
     utils/          Logging, retry logic, and timing utilities
 ```
 
-## Comparison vs Open Alice
+## Available CLI Commands
 
-| Capability              | Gordon                        | Open Alice                   |
-|-------------------------|-------------------------------|------------------------------|
-| Backtesting engine      | Built-in, event-driven        | Not included                 |
-| Strategy framework      | Base classes + templates       | Ad-hoc scripts               |
-| Risk management         | Pipeline with pluggable guards | Manual checks                |
-| Portfolio optimization  | MVO, risk parity, BL          | Not included                 |
-| Multi-asset             | Crypto + equities              | Crypto only                  |
-| Test suite              | pytest + coverage              | Minimal                      |
-| CI/CD                   | GitHub Actions                 | Not configured               |
-| Type safety             | Pydantic + mypy strict         | Partial                      |
+| Command         | Description                                         |
+|-----------------|-----------------------------------------------------|
+| `data fetch`    | Fetch historical OHLCV bars and save to Parquet     |
+| `backtest`      | Run a backtest against historical data               |
+| `optimize`      | Optimize portfolio allocation across assets          |
+| `paper`         | Run a paper-trading session with simulated fills     |
+| `live`          | Run a live trading session with real order execution |
+| `agent`         | Launch the AI trading agent (interactive REPL)       |
 
 ## Roadmap
 
 - [x] Stage 1: Foundation (core models, market data, CLI)
-- [ ] Stage 2: Strategy framework + backtesting engine
-- [ ] Stage 3: Paper trading + live trading
-- [ ] Stage 4: AI agent integration (Claude)
-- [ ] Stage 5: Risk management + portfolio optimization
+- [x] Stage 2: Strategy framework + backtesting engine
+- [x] Stage 3: Paper trading + live trading
+- [x] Stage 4: AI agent integration (Claude)
+- [x] Stage 5: Risk management + portfolio optimization
 - [ ] Stage 6: Web dashboard (React + FastAPI)
 
 ## Contributing

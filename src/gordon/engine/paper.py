@@ -30,6 +30,7 @@ if TYPE_CHECKING:
     from gordon.core.models import Asset
     from gordon.core.protocols import DataFeedProtocol
     from gordon.persistence.store import TradeStore
+    from gordon.risk.manager import RiskManager
     from gordon.strategy.base import Strategy
 
 logger = structlog.get_logger()
@@ -53,6 +54,7 @@ class PaperEngine:
         commission: CommissionModel | None = None,
         poll_interval: float = 60.0,
         store: TradeStore | None = None,
+        risk_manager: RiskManager | None = None,
     ) -> None:
         self._strategies = strategies
         self._assets = assets
@@ -63,6 +65,7 @@ class PaperEngine:
         self._commission = commission
         self._poll_interval = poll_interval
         self._store = store
+        self._risk_manager = risk_manager
         self._running = False
 
     # ------------------------------------------------------------------
@@ -124,7 +127,7 @@ class PaperEngine:
 
                     # Convert signals to orders and submit
                     for sig in signals:
-                        order = signal_to_order(sig, portfolio, close_price)
+                        order = signal_to_order(sig, portfolio, close_price, self._risk_manager)
                         if order is None:
                             continue
                         fill = await broker.submit_order(order)

@@ -14,6 +14,8 @@ import gordon
 from gordon.core.enums import AssetClass, Interval
 from gordon.core.models import Asset
 
+_MAX_INPUT_LENGTH = 10_000
+
 app = typer.Typer(
     name="gordon",
     help="Gordon — AI-powered trading agent.",
@@ -362,6 +364,9 @@ def live(
     ] = "ccxt",
     exchange: Annotated[str, typer.Option("--exchange", help="CCXT exchange.")] = "binance",
     sandbox: Annotated[bool, typer.Option("--sandbox/--live", help="Use sandbox/testnet.")] = True,
+    confirm_live: Annotated[
+        bool, typer.Option("--confirm-live", help="Confirm live trading (required).")
+    ] = False,
     poll: Annotated[float, typer.Option("--poll", help="Poll interval (seconds).")] = 60.0,
     db: Annotated[
         str, typer.Option("--db", help="SQLite database URL.")
@@ -375,6 +380,12 @@ def live(
     from gordon.engine.runner import EngineRunner
     from gordon.persistence import TradeStore
     from gordon.strategy.registry import default_registry
+
+    if not sandbox:
+        rprint(
+            "[bold red]WARNING:[/bold red] Sandbox mode is DISABLED. "
+            "Orders will be submitted to a REAL exchange with REAL funds."
+        )
 
     strat = default_registry.get(strategy)
     if strat is None:
@@ -414,6 +425,7 @@ def live(
         initial_cash=Decimal(str(cash)),
         poll_interval=poll,
         store=store,
+        confirm_live=confirm_live,
     )
 
     mode = "sandbox" if sandbox else "[red]LIVE[/red]"
@@ -495,6 +507,12 @@ def agent(
                 break
 
             if not user_input.strip():
+                continue
+
+            if len(user_input) > _MAX_INPUT_LENGTH:
+                console.print(
+                    f"[red]Input too long ({len(user_input)} chars, max {_MAX_INPUT_LENGTH})[/red]"
+                )
                 continue
 
             with console.status("[bold]Thinking..."):

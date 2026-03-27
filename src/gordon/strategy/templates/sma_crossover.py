@@ -5,12 +5,10 @@ from __future__ import annotations
 from collections import deque
 from typing import Any
 
-import pandas as pd
-
 from gordon.core.enums import Side
 from gordon.core.models import Asset, Bar, PortfolioSnapshot, Signal
 from gordon.strategy.base import Strategy
-from gordon.strategy.indicators import sma
+from gordon.strategy.indicators import bars_to_dataframe, sma
 
 
 class SmaCrossover(Strategy):
@@ -62,7 +60,7 @@ class SmaCrossover(Strategy):
         if len(self._bars) < self._slow_period + 1:
             return []
 
-        df = _bars_to_df(self._bars)
+        df = bars_to_dataframe(self._bars)
         fast = sma(df, self._fast_period)
         slow = sma(df, self._slow_period)
 
@@ -95,24 +93,3 @@ class SmaCrossover(Strategy):
 
         self._was_above = is_above
         return signals
-
-
-# ------------------------------------------------------------------
-# Helpers
-# ------------------------------------------------------------------
-
-
-def _bars_to_df(bars: deque[Bar]) -> pd.DataFrame:
-    """Convert a deque of Bar models to an OHLCV DataFrame."""
-    return pd.DataFrame(
-        [
-            {
-                "open": b.open,
-                "high": b.high,
-                "low": b.low,
-                "close": b.close,
-                "volume": b.volume,
-            }
-            for b in bars
-        ]
-    )

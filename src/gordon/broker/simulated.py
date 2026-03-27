@@ -13,6 +13,10 @@ from gordon.core.enums import OrderType, Side
 from gordon.core.errors import BrokerError, OrderRejectedError
 from gordon.core.models import Fill, Position
 
+_ZERO = Decimal("0")
+_ONE = Decimal("1")
+_TEN_K = Decimal("10000")
+
 if TYPE_CHECKING:
     from gordon.core.models import Asset, Order
 
@@ -45,10 +49,10 @@ class FixedSlippage(SlippageModel):
         self._bps = bps
 
     def apply(self, price: Decimal, side: Side, quantity: Decimal) -> Decimal:
-        factor = self._bps / Decimal("10000")
+        factor = self._bps / _TEN_K
         if side == Side.BUY:
-            return price * (Decimal("1") + factor)
-        return price * (Decimal("1") - factor)
+            return price * (_ONE + factor)
+        return price * (_ONE - factor)
 
 
 class VolumeSlippage(SlippageModel):
@@ -59,7 +63,7 @@ class VolumeSlippage(SlippageModel):
 
     def apply(self, price: Decimal, side: Side, quantity: Decimal) -> Decimal:
         # Simple model: impact = impact_factor * quantity * price / 10000
-        impact = self._impact_factor * quantity * price / Decimal("10000")
+        impact = self._impact_factor * quantity * price / _TEN_K
         if side == Side.BUY:
             return price + impact
         return price - impact
@@ -81,7 +85,7 @@ class NoCommission(CommissionModel):
     """No commission."""
 
     def calculate(self, price: Decimal, quantity: Decimal) -> Decimal:
-        return Decimal("0")
+        return _ZERO
 
 
 class PercentCommission(CommissionModel):
@@ -134,14 +138,13 @@ class SimulatedBroker:
 
     # -- Order management --------------------------------------------------
 
-    async def submit_order(self, order: Order) -> str:
-        """Immediately fill the order at current price + slippage. Returns order id."""
+    async def submit_order(self, order: Order) -> Fill | None:
+        """Fill the order at current price + slippage. Returns the Fill or None."""
         symbol = order.asset.symbol
         current_price = self._current_prices.get(symbol)
         if current_price is None:
             raise BrokerError(f"No price available for {symbol}")
 
-        # Determine fill price based on order type
         if order.order_type == OrderType.MARKET:
             fill_price = self._slippage.apply(current_price, order.side, order.quantity)
         elif order.order_type == OrderType.LIMIT:
@@ -150,17 +153,10 @@ class SimulatedBroker:
                     "Limit order requires limit_price",
                     order_id=order.id,
                 )
-            # Check if limit is achievable at current price
             if order.side == Side.BUY and current_price > order.limit_price:
-                raise OrderRejectedError(
-                    f"Limit buy at {order.limit_price} but market at {current_price}",
-                    order_id=order.id,
-                )
+                return None
             if order.side == Side.SELL and current_price < order.limit_price:
-                raise OrderRejectedError(
-                    f"Limit sell at {order.limit_price} but market at {current_price}",
-                    order_id=order.id,
-                )
+                return None
             fill_price = self._slippage.apply(order.limit_price, order.side, order.quantity)
         else:
             raise OrderRejectedError(
@@ -192,7 +188,7 @@ class SimulatedBroker:
             commission=str(commission),
         )
 
-        return order.id
+        return fill
 
     async def cancel_order(self, order_id: str) -> bool:
         """Cancel an order. Simulated broker fills immediately, so nothing to cancel."""
@@ -200,7 +196,7 @@ class SimulatedBroker:
 
     async def get_positions(self) -> list[Position]:
         """Return current positions."""
-        return [p for p in self._positions.values() if p.quantity != Decimal("0")]
+        return [p for p in self._positions.values() if p.quantity != _ZERO]
 
     async def get_fills(self, since: datetime | None = None) -> list[Fill]:
         """Return fills, optionally filtered by timestamp."""
@@ -220,7 +216,7 @@ class SimulatedBroker:
         symbol = fill.asset.symbol
         existing = self._positions.get(symbol)
 
-        if existing is None or existing.quantity == Decimal("0"):
+        if existing is None or existing.quantity == _ZERO:
             # New position
             self._positions[symbol] = Position(
                 asset=fill.asset,
@@ -231,12 +227,12 @@ class SimulatedBroker:
             old_qty = existing.quantity
             new_qty = old_qty + fill.quantity if fill.side == Side.BUY else old_qty - fill.quantity
 
-            if new_qty == Decimal("0"):
+            if new_qty == _ZERO:
                 # Position fully closed
                 self._positions[symbol] = Position(
                     asset=fill.asset,
-                    quantity=Decimal("0"),
-                    avg_entry_price=Decimal("0"),
+                    quantity=_ZERO,
+                    avg_entry_price=_ZERO,
                 )
             elif (old_qty > 0 and new_qty > 0) or (old_qty < 0 and new_qty < 0):
                 # Adding to position or partial close on same side

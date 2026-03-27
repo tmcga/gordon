@@ -37,6 +37,8 @@ if TYPE_CHECKING:
 
 logger = structlog.get_logger()
 
+_BACKTEST_CLOSE_ID = "__backtest_close__"
+
 
 # ---------------------------------------------------------------------------
 # Result container
@@ -160,7 +162,7 @@ class BacktestEngine:
             )
             await bus.emit(mkt_event)
 
-            # d. Get current portfolio snapshot for strategy context
+            # d. Snapshot for strategy context and equity curve
             portfolio = tracker.snapshot(tbar.timestamp)
 
             # e. Evaluate each strategy
@@ -181,17 +183,17 @@ class BacktestEngine:
                 order = self._signal_to_order(sig, portfolio, close_price)
                 if order is None:
                     continue
-                fill_count_before = len(broker.fill_history)
-                await broker.submit_order(order)
-                if len(broker.fill_history) > fill_count_before:
-                    fill = broker.fill_history[-1]
+                fill = await broker.submit_order(order)
+                if fill is not None:
                     all_fills.append(fill)
                     tracker.on_fill(fill)
                     await bus.emit(FillEvent(timestamp=tbar.timestamp, fill=fill))
 
-            # g. Take snapshot
-            snap = tracker.snapshot(tbar.timestamp)
-            snapshots.append(snap)
+            # g. Record snapshot (post-fill for accurate equity)
+            if signals:
+                snapshots.append(tracker.snapshot(tbar.timestamp))
+            else:
+                snapshots.append(portfolio)
 
         # 4. Close all open positions at final prices
         closing_fills = await self._close_positions(broker, tracker)
@@ -319,12 +321,10 @@ class BacktestEngine:
                 side=side,
                 order_type=OrderType.MARKET,
                 quantity=abs(pos.quantity),
-                strategy_id="__backtest_close__",
+                strategy_id=_BACKTEST_CLOSE_ID,
             )
-            fill_count_before = len(broker.fill_history)
-            await broker.submit_order(order)
-            if len(broker.fill_history) > fill_count_before:
-                fill = broker.fill_history[-1]
+            fill = await broker.submit_order(order)
+            if fill is not None:
                 fills.append(fill)
                 tracker.on_fill(fill)
         return fills

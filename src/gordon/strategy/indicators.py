@@ -7,12 +7,33 @@ to ``float`` before delegating to pandas-ta.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING, Any
+
 import pandas as pd
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
 import pandas_ta as ta
 
 # ------------------------------------------------------------------
 # Internal helpers
 # ------------------------------------------------------------------
+
+
+def bars_to_dataframe(bars: Iterable[Any]) -> pd.DataFrame:
+    """Convert an iterable of Bar models to an OHLCV DataFrame."""
+    return pd.DataFrame(
+        [
+            {
+                "open": b.open,
+                "high": b.high,
+                "low": b.low,
+                "close": b.close,
+                "volume": b.volume,
+            }
+            for b in bars
+        ]
+    )
 
 
 def _float_series(s: pd.Series) -> pd.Series:

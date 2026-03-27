@@ -5,12 +5,10 @@ from __future__ import annotations
 from collections import deque
 from typing import Any
 
-import pandas as pd
-
 from gordon.core.enums import Side
 from gordon.core.models import Asset, Bar, PortfolioSnapshot, Signal
 from gordon.strategy.base import Strategy
-from gordon.strategy.indicators import rsi
+from gordon.strategy.indicators import bars_to_dataframe, rsi
 
 
 class Momentum(Strategy):
@@ -67,7 +65,7 @@ class Momentum(Strategy):
         if len(self._bars) < self._rsi_period + 2:
             return []
 
-        df = _bars_to_df(self._bars)
+        df = bars_to_dataframe(self._bars)
         rsi_series = rsi(df, self._rsi_period)
         current_rsi = float(rsi_series.iloc[-1])
 
@@ -112,24 +110,3 @@ class Momentum(Strategy):
 
         self._prev_rsi = current_rsi
         return signals
-
-
-# ------------------------------------------------------------------
-# Helpers
-# ------------------------------------------------------------------
-
-
-def _bars_to_df(bars: deque[Bar]) -> pd.DataFrame:
-    """Convert a deque of Bar models to an OHLCV DataFrame."""
-    return pd.DataFrame(
-        [
-            {
-                "open": b.open,
-                "high": b.high,
-                "low": b.low,
-                "close": b.close,
-                "volume": b.volume,
-            }
-            for b in bars
-        ]
-    )

@@ -17,7 +17,7 @@ from gordon.broker.simulated import (
     VolumeSlippage,
 )
 from gordon.core.enums import AssetClass, OrderType, Side
-from gordon.core.errors import BrokerError, OrderRejectedError
+from gordon.core.errors import BrokerError
 from gordon.core.models import Asset, Order
 
 # ---------------------------------------------------------------------------
@@ -116,14 +116,11 @@ class TestSimulatedBroker:
         broker = SimulatedBroker()
         broker.set_current_price(ASSET, Decimal("150"))
         order = _market_order()
-        order_id = await broker.submit_order(order)
-        assert isinstance(order_id, str)
-
-        fills = broker.fill_history
-        assert len(fills) == 1
-        assert fills[0].price == Decimal("150")
-        assert fills[0].quantity == Decimal("10")
-        assert fills[0].side == Side.BUY
+        fill = await broker.submit_order(order)
+        assert fill is not None
+        assert fill.price == Decimal("150")
+        assert fill.quantity == Decimal("10")
+        assert fill.side == Side.BUY
 
     @pytest.mark.asyncio
     async def test_no_price_raises_broker_error(self):
@@ -175,16 +172,16 @@ class TestSimulatedBroker:
         broker = SimulatedBroker()
         broker.set_current_price(ASSET, Decimal("100"))
         order = _limit_order(Side.BUY, limit=Decimal("95"))  # limit below market
-        with pytest.raises(OrderRejectedError):
-            await broker.submit_order(order)
+        fill = await broker.submit_order(order)
+        assert fill is None
 
     @pytest.mark.asyncio
     async def test_limit_order_sell_rejected_when_unachievable(self):
         broker = SimulatedBroker()
         broker.set_current_price(ASSET, Decimal("100"))
         order = _limit_order(Side.SELL, limit=Decimal("105"))  # limit above market
-        with pytest.raises(OrderRejectedError):
-            await broker.submit_order(order)
+        fill = await broker.submit_order(order)
+        assert fill is None
 
     @pytest.mark.asyncio
     async def test_cancel_order_returns_false(self):

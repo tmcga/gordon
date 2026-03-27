@@ -5,12 +5,10 @@ from __future__ import annotations
 from collections import deque
 from typing import Any
 
-import pandas as pd
-
 from gordon.core.enums import Side
 from gordon.core.models import Asset, Bar, PortfolioSnapshot, Signal
 from gordon.strategy.base import Strategy
-from gordon.strategy.indicators import bbands, rsi
+from gordon.strategy.indicators import bars_to_dataframe, bbands, rsi
 
 
 class MeanReversion(Strategy):
@@ -41,6 +39,8 @@ class MeanReversion(Strategy):
         self._bb_period: int = self._params.get("bb_period", 20)
         self._bb_std: float = self._params.get("bb_std", 2.0)
         self._rsi_period: int = self._params.get("rsi_period", 14)
+        self._rsi_oversold: float = self._params.get("rsi_oversold", 30.0)
+        self._rsi_overbought: float = self._params.get("rsi_overbought", 70.0)
         maxlen = max(self._bb_period, self._rsi_period) + 20
         self._bars: deque[Bar] = deque(maxlen=maxlen)
 
@@ -67,7 +67,7 @@ class MeanReversion(Strategy):
         if len(self._bars) < min_bars:
             return []
 
-        df = _bars_to_df(self._bars)
+        df = bars_to_dataframe(self._bars)
         bands = bbands(df, period=self._bb_period, std=self._bb_std)
         rsi_series = rsi(df, period=self._rsi_period)
 
@@ -80,7 +80,7 @@ class MeanReversion(Strategy):
         signals: list[Signal] = []
 
         # BUY — price below lower band AND RSI oversold
-        if close < lower and current_rsi < 30:
+        if close < lower and current_rsi < self._rsi_oversold:
             band_width = middle - lower if middle != lower else 1.0
             distance = lower - close
             strength = min(0.5 + (distance / band_width) * 0.5, 1.0)
@@ -97,7 +97,7 @@ class MeanReversion(Strategy):
             )
 
         # SELL — price above upper band AND RSI overbought
-        if close > upper and current_rsi > 70:
+        if close > upper and current_rsi > self._rsi_overbought:
             band_width = upper - middle if upper != middle else 1.0
             distance = close - upper
             strength = -min(0.5 + (distance / band_width) * 0.5, 1.0)
@@ -114,24 +114,3 @@ class MeanReversion(Strategy):
             )
 
         return signals
-
-
-# ------------------------------------------------------------------
-# Helpers
-# ------------------------------------------------------------------
-
-
-def _bars_to_df(bars: deque[Bar]) -> pd.DataFrame:
-    """Convert a deque of Bar models to an OHLCV DataFrame."""
-    return pd.DataFrame(
-        [
-            {
-                "open": b.open,
-                "high": b.high,
-                "low": b.low,
-                "close": b.close,
-                "volume": b.volume,
-            }
-            for b in bars
-        ]
-    )

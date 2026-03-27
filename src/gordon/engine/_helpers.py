@@ -22,6 +22,7 @@ if TYPE_CHECKING:
     from gordon.engine.event_bus import EventBus
     from gordon.persistence.store import TradeStore
     from gordon.portfolio.tracker import PortfolioTracker
+    from gordon.risk.manager import RiskManager
     from gordon.strategy.base import Strategy
 
 logger = structlog.get_logger()
@@ -45,8 +46,13 @@ def signal_to_order(
     signal: Signal,
     portfolio: PortfolioSnapshot,
     price: Decimal,
+    risk_manager: RiskManager | None = None,
 ) -> Order | None:
-    """Convert a Signal into an Order using strength-based sizing."""
+    """Convert a Signal into an Order using strength-based sizing.
+
+    If *risk_manager* is supplied the order is checked before returning.
+    A rejected order results in ``None``.
+    """
     if price <= 0:
         return None
 
@@ -71,13 +77,27 @@ def signal_to_order(
         if quantity <= 0:
             return None
 
-    return Order(
+    order = Order(
         asset=signal.asset,
         side=signal.side,
         order_type=OrderType.MARKET,
         quantity=quantity,
         strategy_id=signal.strategy_id,
     )
+
+    if risk_manager is not None:
+        verdict = risk_manager.check(order, portfolio)
+        if not verdict:
+            logger.info(
+                "order_rejected_by_risk",
+                reason=verdict.reason,
+                order_id=order.id,
+                asset=str(order.asset),
+                side=str(order.side),
+            )
+            return None
+
+    return order
 
 
 async def fetch_latest_bar(

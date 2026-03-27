@@ -57,9 +57,11 @@ class CCXTDataFeed(BaseDataFeed):
 
     @staticmethod
     def _init_exchange(exchange_id: str) -> ccxt.Exchange:
-        exchange_class = getattr(ccxt, exchange_id, None)
-        if exchange_class is None:
-            raise DataError(f"Unknown CCXT exchange: {exchange_id!r}")
+        if exchange_id not in ccxt.exchanges:
+            raise DataError(
+                f"Unknown exchange: {exchange_id}. Valid: {', '.join(ccxt.exchanges[:10])}..."
+            )
+        exchange_class = getattr(ccxt, exchange_id)
         return exchange_class({"enableRateLimit": True})
 
     # ------------------------------------------------------------------

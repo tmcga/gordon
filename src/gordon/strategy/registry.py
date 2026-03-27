@@ -6,7 +6,7 @@ import importlib.util
 import inspect
 import logging
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 from gordon.strategy.base import Strategy
 
@@ -63,18 +63,34 @@ class StrategyRegistry:
         """Return sorted list of registered strategy names."""
         return sorted(self._strategies)
 
+    _ALLOWED_EXTENSIONS: ClassVar[set[str]] = {".py"}
+
     def discover(self, path: Path) -> int:
         """Import every ``*.py`` file under *path* and register Strategy subclasses.
 
         Returns the number of newly-registered strategy classes.
+
+        Only ``.py`` files are loaded; ``__init__.py`` and other dunder files
+        are skipped.  The *path* must be an existing directory.
         """
-        path = Path(path)
-        if not path.is_dir():
-            raise NotADirectoryError(f"{path} is not a directory")
+        resolved = Path(path).resolve()
+        if not resolved.is_dir():
+            raise ValueError(f"Strategy path is not a directory: {resolved}")
+
+        # Warn for paths outside the package tree
+        package_root = Path(__file__).resolve().parent.parent
+        if not str(resolved).startswith(str(package_root)):
+            log.warning(
+                "Discovering strategies from outside the package: %s",
+                resolved,
+            )
 
         count = 0
-        for py_file in sorted(path.glob("*.py")):
-            if py_file.name.startswith("_"):
+        for py_file in sorted(resolved.glob("*.py")):
+            # Skip dunder files and non-.py extensions
+            if py_file.name.startswith("__"):
+                continue
+            if py_file.suffix not in self._ALLOWED_EXTENSIONS:
                 continue
             try:
                 module = _import_file(py_file)

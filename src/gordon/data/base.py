@@ -5,15 +5,19 @@ from __future__ import annotations
 import hashlib
 import logging
 from abc import ABC, abstractmethod
-from datetime import datetime
 from decimal import Decimal, InvalidOperation
-from typing import AsyncIterator
+from typing import TYPE_CHECKING
 
 import pandas as pd
 
-from gordon.core.enums import Interval
 from gordon.core.errors import DataError
-from gordon.core.models import Asset, Bar
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
+    from datetime import datetime
+
+    from gordon.core.enums import Interval
+    from gordon.core.models import Asset, Bar
 
 logger = logging.getLogger(__name__)
 

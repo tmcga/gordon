@@ -4,16 +4,20 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import AsyncIterator
-from datetime import datetime
+from typing import TYPE_CHECKING
 
 import pandas as pd
 import yfinance as yf
 
 from gordon.core.enums import AssetClass, Interval
 from gordon.core.errors import DataError
-from gordon.core.models import Asset, Bar
 from gordon.data.base import BaseDataFeed
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
+    from datetime import datetime
+
+    from gordon.core.models import Asset, Bar
 
 logger = logging.getLogger(__name__)
 
@@ -112,8 +116,7 @@ class YFinanceDataFeed(BaseDataFeed):
     def _to_yf_symbol(asset: Asset) -> str:
         """Convert a Gordon ``Asset`` to a yfinance ticker string."""
         symbol = asset.symbol.upper()
-        if asset.asset_class == AssetClass.CRYPTO:
-            # yfinance expects crypto as e.g. "BTC-USD"
-            if not symbol.endswith("-USD"):
-                symbol = f"{symbol}-USD"
+        # yfinance expects crypto as e.g. "BTC-USD"
+        if asset.asset_class == AssetClass.CRYPTO and not symbol.endswith("-USD"):
+            symbol = f"{symbol}-USD"
         return symbol

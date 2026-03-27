@@ -6,9 +6,8 @@ import asyncio
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-import structlog
-
 import pandas as pd
+import structlog
 
 from gordon.core.enums import Interval
 from gordon.core.models import Asset, Bar

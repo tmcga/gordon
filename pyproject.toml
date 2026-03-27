@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "AI-powered trading agent with backtesting, risk management, and portfolio optimization"
 readme = "README.md"
 license = "MIT"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 authors = [{ name = "TJM" }]
 keywords = ["trading", "ai", "backtesting", "portfolio", "quantitative-finance"]
 classifiers = [
@@ -16,7 +16,6 @@ classifiers = [
     "Intended Audience :: Developers",
     "Intended Audience :: Financial and Insurance Industry",
     "License :: OSI Approved :: MIT License",
-    "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Topic :: Office/Business :: Financial :: Investment",
@@ -70,7 +69,7 @@ packages = ["src/gordon"]
 
 [tool.ruff]
 src = ["src"]
-target-version = "py311"
+target-version = "py312"
 line-length = 99
 
 [tool.ruff.lint]
@@ -94,7 +93,7 @@ runtime-evaluated-base-classes = ["sqlalchemy.orm.DeclarativeBase"]
 known-first-party = ["gordon"]
 
 [tool.mypy]
-python_version = "3.11"
+python_version = "3.12"
 strict = true
 plugins = ["pydantic.mypy"]
 mypy_path = "src"
@@ -134,3 +133,7 @@ exclude_lines = [
     "@overload",
     "raise NotImplementedError",
 ]
+
+[tool.bandit]
+exclude_dirs = ["tests"]
+skips = ["B101"]  # assert is fine in non-production code

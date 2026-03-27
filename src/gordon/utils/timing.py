@@ -6,11 +6,9 @@ import asyncio
 import functools
 import time
 from collections.abc import Callable
-from typing import Any, TypeVar
+from typing import Any
 
 import structlog
-
-F = TypeVar("F", bound=Callable[..., Any])
 
 log = structlog.get_logger()
 
@@ -20,7 +18,7 @@ log = structlog.get_logger()
 # ---------------------------------------------------------------------------
 
 
-def timed(fn: F) -> F:
+def timed[F: Callable[..., Any]](fn: F) -> F:
     """Log execution time of a sync or async function via structlog."""
 
     if asyncio.iscoroutinefunction(fn):

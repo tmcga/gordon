@@ -3,16 +3,20 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import AsyncIterator
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 
 import ccxt
 import pandas as pd
 
 from gordon.core.enums import Interval
 from gordon.core.errors import DataError
-from gordon.core.models import Asset, Bar
 from gordon.data.base import BaseDataFeed
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
+
+    from gordon.core.models import Asset, Bar
 
 logger = logging.getLogger(__name__)
 
@@ -74,7 +78,7 @@ class CCXTDataFeed(BaseDataFeed):
             raise DataError(f"Unsupported interval for CCXT: {interval}")
 
         symbol = self._to_ccxt_symbol(asset)
-        since_ms = int(start.replace(tzinfo=timezone.utc).timestamp() * 1000)
+        since_ms = int(start.replace(tzinfo=UTC).timestamp() * 1000)
 
         logger.info(
             "Fetching %s bars for %s on %s (since %s)",
@@ -86,9 +90,7 @@ class CCXTDataFeed(BaseDataFeed):
 
         all_ohlcv: list[list[object]] = []
         limit = 1000  # most exchanges cap at 1000 per request
-        end_ms = (
-            int(end.replace(tzinfo=timezone.utc).timestamp() * 1000) if end else None
-        )
+        end_ms = int(end.replace(tzinfo=UTC).timestamp() * 1000) if end else None
 
         while True:
             ohlcv = self._exchange.fetch_ohlcv(

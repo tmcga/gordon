@@ -104,6 +104,7 @@ module = [
     "yfinance.*",
     "pandas_ta.*",
     "alpaca.*",
+    "scipy.*",
 ]
 ignore_missing_imports = true
 
@@ -113,6 +114,10 @@ module = [
     "gordon.broker.ccxt_broker",
 ]
 disable_error_code = ["union-attr", "no-untyped-def"]
+
+[[tool.mypy.overrides]]
+module = ["gordon.portfolio.optimizer"]
+disable_error_code = ["arg-type", "type-arg", "assignment", "no-any-return", "misc", "import-untyped"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

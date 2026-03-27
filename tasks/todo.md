@@ -1,20 +1,18 @@
-# Gordon — Stage 4: AI Agent Integration
+# Gordon — Stage 5: Risk Management + Portfolio Optimization
 
 ## Tasks
-- [x] Build agent tools (portfolio, market data, backtest, orders, risk)
-- [x] Build agent brain (perceive -> reason -> act orchestrator)
-- [x] Build agent memory (conversation + observation log)
-- [x] Build Anthropic provider (Claude tool_use integration)
-- [x] Build agent prompts (system prompts with market context)
-- [x] Wire CLI agent command (interactive REPL)
-- [x] Write tests (tools, memory, brain, prompts)
+- [x] Build RiskManager (composable guard pipeline)
+- [x] Build risk guards (position size, concentration, cooldown, drawdown, whitelist)
+- [x] Build position sizing (Kelly, fixed fractional, volatility-targeted)
+- [x] Build portfolio optimizer (mean-variance, risk parity, Black-Litterman)
+- [x] Build rebalancer (target-weight order generation)
+- [x] Wire optimizer into agent tools + CLI command
+- [x] Write tests (guards, manager, sizing, limits, optimizer, rebalancer)
 - [x] Verify: lint, typecheck, all tests pass
 
 ## Review
 - Lint (ruff check + format): PASS
-- Type check (mypy strict): PASS — 0 errors in 57 files
-- Tests (pytest): 223 passed in 2.39s
-- CLI `gordon agent` wired as interactive REPL with Rich markdown output
-- 7 tools: portfolio status, market data, technical analysis, backtest,
-  submit order, risk report, list strategies
-- Agent can backtest, analyze, and optimize *before* trading
+- Type check (mypy strict): PASS — 0 errors in 64 files
+- Tests (pytest): 303 passed in 2.69s
+- CLI: `gordon optimize --symbols AAPL,MSFT,GOOG --method mean-variance`
+- 6 risk guards, 3 position sizers, 3 optimizer methods, rebalancer

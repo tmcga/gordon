@@ -219,15 +219,134 @@ def backtest(
 
 
 @app.command()
-def paper() -> None:
-    """Run a paper-trading session."""
-    rprint("[yellow]Coming in Stage 3[/yellow]")
+def paper(
+    strategy: Annotated[
+        str, typer.Option("--strategy", "-S", help="Strategy name.")
+    ] = "sma_crossover",
+    symbols: Annotated[str, typer.Option("--symbols", help="Comma-separated symbols.")] = "AAPL",
+    interval: Annotated[str, typer.Option("--interval", "-i", help="Bar interval.")] = "1d",
+    cash: Annotated[float, typer.Option("--cash", help="Initial cash.")] = 100_000.0,
+    provider: Annotated[str, typer.Option("--provider", "-p", help="Data provider.")] = "yfinance",
+    asset_class: Annotated[
+        str, typer.Option("--asset-class", "-a", help="Asset class.")
+    ] = "equity",
+    poll: Annotated[float, typer.Option("--poll", help="Poll interval (seconds).")] = 60.0,
+    db: Annotated[
+        str, typer.Option("--db", help="SQLite database URL.")
+    ] = "sqlite:///gordon_trades.db",
+) -> None:
+    """Run a paper-trading session with live data and simulated fills."""
+    from decimal import Decimal
+
+    import gordon.strategy.templates  # noqa: F401
+    from gordon.data.providers import YFinanceDataFeed
+    from gordon.engine.paper import PaperEngine
+    from gordon.engine.runner import EngineRunner
+    from gordon.persistence import TradeStore
+    from gordon.strategy.registry import default_registry
+
+    strat = default_registry.get(strategy)
+    if strat is None:
+        rprint(f"[red]Unknown strategy:[/red] {strategy}")
+        raise typer.Exit(code=1)
+
+    ac = AssetClass(asset_class)
+    assets = [Asset(symbol=s.strip(), asset_class=ac) for s in symbols.split(",")]
+    iv = Interval(interval)
+    feed = YFinanceDataFeed()
+    store = TradeStore(db_url=db)
+
+    engine = PaperEngine(
+        strategies=[strat],
+        assets=assets,
+        data_feed=feed,  # type: ignore[arg-type]
+        interval=iv,
+        initial_cash=Decimal(str(cash)),
+        poll_interval=poll,
+        store=store,
+    )
+
+    rprint(f"[bold]Paper trading[/bold] {strategy} on {symbols} ({iv}) — Ctrl+C to stop")
+    runner = EngineRunner(engine)
+    runner.run()
 
 
 @app.command()
-def live() -> None:
-    """Run a live trading session."""
-    rprint("[yellow]Coming in Stage 3[/yellow]")
+def live(
+    strategy: Annotated[
+        str, typer.Option("--strategy", "-S", help="Strategy name.")
+    ] = "sma_crossover",
+    symbols: Annotated[
+        str, typer.Option("--symbols", help="Comma-separated symbols.")
+    ] = "BTC/USDT",
+    interval: Annotated[str, typer.Option("--interval", "-i", help="Bar interval.")] = "1d",
+    cash: Annotated[float, typer.Option("--cash", help="Initial cash.")] = 100_000.0,
+    broker_type: Annotated[
+        str, typer.Option("--broker", "-b", help="Broker: ccxt or alpaca.")
+    ] = "ccxt",
+    exchange: Annotated[str, typer.Option("--exchange", help="CCXT exchange.")] = "binance",
+    sandbox: Annotated[bool, typer.Option("--sandbox/--live", help="Use sandbox/testnet.")] = True,
+    poll: Annotated[float, typer.Option("--poll", help="Poll interval (seconds).")] = 60.0,
+    db: Annotated[
+        str, typer.Option("--db", help="SQLite database URL.")
+    ] = "sqlite:///gordon_trades.db",
+) -> None:
+    """Run a live trading session with real order execution."""
+    from decimal import Decimal
+
+    import gordon.strategy.templates  # noqa: F401
+    from gordon.engine.live import LiveEngine
+    from gordon.engine.runner import EngineRunner
+    from gordon.persistence import TradeStore
+    from gordon.strategy.registry import default_registry
+
+    strat = default_registry.get(strategy)
+    if strat is None:
+        rprint(f"[red]Unknown strategy:[/red] {strategy}")
+        raise typer.Exit(code=1)
+
+    ac = AssetClass.CRYPTO if broker_type == "ccxt" else AssetClass.EQUITY
+    assets = [Asset(symbol=s.strip(), asset_class=ac) for s in symbols.split(",")]
+    iv = Interval(interval)
+    store = TradeStore(db_url=db)
+
+    broker_obj: object
+    feed_obj: object
+
+    if broker_type == "ccxt":
+        from gordon.broker.ccxt_broker import CCXTBroker
+        from gordon.data.providers import CCXTDataFeed
+
+        broker_obj = CCXTBroker(exchange=exchange, sandbox=sandbox)
+        feed_obj = CCXTDataFeed(exchange=exchange)
+    elif broker_type == "alpaca":
+        from gordon.broker.alpaca_broker import AlpacaBroker
+        from gordon.data.providers import YFinanceDataFeed
+
+        broker_obj = AlpacaBroker(paper=sandbox)
+        feed_obj = YFinanceDataFeed()
+    else:
+        rprint(f"[red]Unknown broker:[/red] {broker_type}")
+        raise typer.Exit(code=1)
+
+    engine = LiveEngine(
+        strategies=[strat],
+        assets=assets,
+        data_feed=feed_obj,  # type: ignore[arg-type]
+        broker=broker_obj,
+        interval=iv,
+        initial_cash=Decimal(str(cash)),
+        poll_interval=poll,
+        store=store,
+    )
+
+    mode = "sandbox" if sandbox else "[red]LIVE[/red]"
+    rprint(
+        f"[bold]Live trading[/bold] ({mode}) {strategy} on "
+        f"{symbols} via {broker_type} — Ctrl+C to stop"
+    )
+    runner = EngineRunner(engine)
+    runner.run()
 
 
 @app.command()

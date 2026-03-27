@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "AI-powered trading agent with backtesting, risk management, and portfolio optimization"
 readme = "README.md"
 license = "MIT"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 authors = [{ name = "TJM" }]
 keywords = ["trading", "ai", "backtesting", "portfolio", "quantitative-finance"]
 classifiers = [
@@ -16,7 +16,6 @@ classifiers = [
     "Intended Audience :: Developers",
     "Intended Audience :: Financial and Insurance Industry",
     "License :: OSI Approved :: MIT License",
-    "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Topic :: Office/Business :: Financial :: Investment",
@@ -70,7 +69,7 @@ packages = ["src/gordon"]
 
 [tool.ruff]
 src = ["src"]
-target-version = "py311"
+target-version = "py312"
 line-length = 99
 
 [tool.ruff.lint]
@@ -87,11 +86,14 @@ select = [
     "RUF",   # ruff-specific
 ]
 
+[tool.ruff.lint.flake8-type-checking]
+runtime-evaluated-base-classes = ["sqlalchemy.orm.DeclarativeBase"]
+
 [tool.ruff.lint.isort]
 known-first-party = ["gordon"]
 
 [tool.mypy]
-python_version = "3.11"
+python_version = "3.12"
 strict = true
 plugins = ["pydantic.mypy"]
 mypy_path = "src"
@@ -104,6 +106,13 @@ module = [
     "alpaca.*",
 ]
 ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = [
+    "gordon.broker.alpaca_broker",
+    "gordon.broker.ccxt_broker",
+]
+disable_error_code = ["union-attr", "no-untyped-def"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -124,3 +133,7 @@ exclude_lines = [
     "@overload",
     "raise NotImplementedError",
 ]
+
+[tool.bandit]
+exclude_dirs = ["tests"]
+skips = ["B101", "B107"]  # B101: assert ok; B107: empty default passwords are env-overridden

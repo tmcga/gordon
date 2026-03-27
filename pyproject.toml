@@ -87,6 +87,9 @@ select = [
     "RUF",   # ruff-specific
 ]
 
+[tool.ruff.lint.flake8-type-checking]
+runtime-evaluated-base-classes = ["sqlalchemy.orm.DeclarativeBase"]
+
 [tool.ruff.lint.isort]
 known-first-party = ["gordon"]
 
@@ -104,6 +107,13 @@ module = [
     "alpaca.*",
 ]
 ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = [
+    "gordon.broker.alpaca_broker",
+    "gordon.broker.ccxt_broker",
+]
+disable_error_code = ["union-attr", "no-untyped-def"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

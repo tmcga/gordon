@@ -16,17 +16,16 @@ import pandas as pd
 import structlog
 
 from gordon.broker.simulated import CommissionModel, SimulatedBroker, SlippageModel
-from gordon.core.enums import OrderType, Side
 from gordon.core.events import FillEvent, MarketEvent
 from gordon.core.models import (
     Asset,
     Bar,
     Fill,
-    Order,
     PortfolioSnapshot,
     Signal,
     TradeRecord,
 )
+from gordon.engine._helpers import close_positions, signal_to_order
 from gordon.engine.clock import SimulatedClock
 from gordon.engine.event_bus import EventBus
 from gordon.portfolio.tracker import PortfolioTracker
@@ -36,9 +35,6 @@ if TYPE_CHECKING:
     from gordon.strategy.base import Strategy
 
 logger = structlog.get_logger()
-
-_BACKTEST_CLOSE_ID = "__backtest_close__"
-
 
 # ---------------------------------------------------------------------------
 # Result container
@@ -180,7 +176,7 @@ class BacktestEngine:
 
             # f. Convert signals to orders and submit
             for sig in signals:
-                order = self._signal_to_order(sig, portfolio, close_price)
+                order = signal_to_order(sig, portfolio, close_price)
                 if order is None:
                     continue
                 fill = await broker.submit_order(order)
@@ -196,10 +192,8 @@ class BacktestEngine:
                 snapshots.append(portfolio)
 
         # 4. Close all open positions at final prices
-        closing_fills = await self._close_positions(broker, tracker)
+        closing_fills = await close_positions(broker, tracker, bus)
         all_fills.extend(closing_fills)
-        for cfill in closing_fills:
-            await bus.emit(FillEvent(timestamp=cfill.timestamp, fill=cfill))
 
         # Final snapshot after closing
         if bars:
@@ -264,70 +258,6 @@ class BacktestEngine:
 
         timed.sort(key=lambda tb: tb.timestamp)
         return timed
-
-    def _signal_to_order(
-        self,
-        signal: Signal,
-        portfolio: PortfolioSnapshot,
-        price: Decimal,
-    ) -> Order | None:
-        """Convert a Signal into an Order using strength-based sizing."""
-        if price <= 0:
-            return None
-
-        strength = abs(signal.strength)
-        if strength < 1e-9:
-            return None
-
-        if signal.side == Side.BUY:
-            available = portfolio.cash
-            notional = available * Decimal(str(strength))
-            quantity = (notional / price).quantize(Decimal("0.0001"))
-            if quantity <= 0:
-                return None
-        else:
-            # Sell: sell proportion of current holding
-            held = Decimal("0")
-            for pos in portfolio.positions:
-                if pos.asset == signal.asset and pos.quantity > 0:
-                    held = pos.quantity
-                    break
-            quantity = (held * Decimal(str(strength))).quantize(Decimal("0.0001"))
-            if quantity <= 0:
-                return None
-
-        return Order(
-            asset=signal.asset,
-            side=signal.side,
-            order_type=OrderType.MARKET,
-            quantity=quantity,
-            strategy_id=signal.strategy_id,
-        )
-
-    async def _close_positions(
-        self,
-        broker: SimulatedBroker,
-        tracker: PortfolioTracker,
-    ) -> list[Fill]:
-        """Close all open positions at current market prices."""
-        fills: list[Fill] = []
-        positions = list(tracker.positions.values())
-        for pos in positions:
-            if pos.quantity == Decimal("0"):
-                continue
-            side = Side.SELL if pos.quantity > 0 else Side.BUY
-            order = Order(
-                asset=pos.asset,
-                side=side,
-                order_type=OrderType.MARKET,
-                quantity=abs(pos.quantity),
-                strategy_id=_BACKTEST_CLOSE_ID,
-            )
-            fill = await broker.submit_order(order)
-            if fill is not None:
-                fills.append(fill)
-                tracker.on_fill(fill)
-        return fills
 
     def _empty_result(self) -> BacktestResult:
         """Return a stub result when there is no data."""

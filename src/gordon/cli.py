@@ -350,6 +350,85 @@ def live(
 
 
 @app.command()
-def agent() -> None:
-    """Launch the AI trading agent."""
-    rprint("[yellow]Coming in Stage 4[/yellow]")
+def agent(
+    model: Annotated[
+        str, typer.Option("--model", "-m", help="Claude model.")
+    ] = "claude-sonnet-4-20250514",
+    cash: Annotated[float, typer.Option("--cash", help="Initial cash.")] = 100_000.0,
+    db: Annotated[
+        str, typer.Option("--db", help="Memory database URL.")
+    ] = "sqlite:///gordon_agent.db",
+) -> None:
+    """Launch the AI trading agent (interactive REPL)."""
+    import asyncio
+    from decimal import Decimal
+
+    from rich.console import Console
+    from rich.markdown import Markdown
+
+    from gordon.agent.brain import AgentBrain
+    from gordon.agent.brain import AgentContext as BrainContext
+    from gordon.agent.memory import AgentMemory
+    from gordon.agent.prompts import build_system_prompt
+    from gordon.agent.providers.anthropic import AnthropicProvider
+    from gordon.agent.tools import TOOLS, execute_tool
+    from gordon.agent.tools import AgentContext as ToolsContext
+    from gordon.broker.simulated import SimulatedBroker
+    from gordon.data.providers import YFinanceDataFeed
+    from gordon.portfolio.tracker import PortfolioTracker
+
+    console = Console()
+
+    # Build tools context
+    tracker = PortfolioTracker(initial_cash=Decimal(str(cash)))
+    tools_ctx = ToolsContext(
+        tracker=tracker,
+        data_feed=YFinanceDataFeed(),
+        broker=SimulatedBroker(),
+    )
+
+    # Bridge: wrap execute_tool into the brain's handler signature
+    async def _handler(name: str, args: dict) -> str:  # type: ignore[type-arg]
+        return await execute_tool(name, args, tools_ctx)
+
+    brain_ctx = BrainContext(
+        tool_handlers={t["name"]: _handler for t in TOOLS},
+    )
+
+    provider = AnthropicProvider(model=model)
+    memory = AgentMemory(db_url=db)
+    system_prompt = build_system_prompt(tools_ctx)
+
+    brain = AgentBrain(
+        provider=provider,
+        tools=TOOLS,
+        context=brain_ctx,
+        memory=memory,
+        system_prompt=system_prompt,
+    )
+
+    console.print(f"[bold]Gordon AI Agent[/bold] — ${cash:,.0f} paper portfolio, {model}")
+    console.print("Type your message (Ctrl+C to exit)\n")
+
+    async def _repl() -> None:
+        while True:
+            try:
+                user_input = console.input("[bold green]You:[/bold green] ")
+            except (KeyboardInterrupt, EOFError):
+                console.print("\n[dim]Goodbye.[/dim]")
+                break
+
+            if not user_input.strip():
+                continue
+
+            with console.status("[bold]Thinking..."):
+                response = await brain.chat(user_input)
+
+            console.print()
+            console.print(Markdown(response))
+            console.print()
+
+    try:
+        asyncio.run(_repl())
+    finally:
+        memory.close()

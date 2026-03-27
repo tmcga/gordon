@@ -42,6 +42,8 @@ class AgentContext:
     data_feed: BaseDataFeed
     broker: SimulatedBroker | None = None
     strategies: dict[str, Strategy] = field(default_factory=dict)
+    order_confirmation: bool = True
+    _pending_order: dict[str, Any] | None = field(default=None, repr=False)
 
 
 # ---------------------------------------------------------------------------
@@ -211,12 +213,26 @@ LIST_STRATEGIES: dict[str, Any] = {
     },
 }
 
+CONFIRM_ORDER: dict[str, Any] = {
+    "name": "confirm_order",
+    "description": (
+        "Confirm and execute a previously staged order from submit_order. "
+        "Must be called after submit_order to actually place the trade."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+    },
+}
+
 TOOLS: list[dict[str, Any]] = [
     GET_PORTFOLIO_STATUS,
     GET_MARKET_DATA,
     ANALYZE_TECHNICAL,
     RUN_BACKTEST,
     SUBMIT_ORDER,
+    CONFIRM_ORDER,
     GET_RISK_REPORT,
     LIST_STRATEGIES,
 ]
@@ -258,7 +274,7 @@ async def _handle_get_market_data(
 ) -> str:
     symbol: str = args["symbol"]
     interval_str: str = args.get("interval", "1d")
-    lookback_days: int = args.get("lookback_days", 30)
+    lookback_days: int = min(int(args.get("lookback_days", 30)), 730)
 
     asset = Asset(symbol=symbol.upper(), asset_class=AssetClass.EQUITY)
     interval = Interval(interval_str)
@@ -386,11 +402,55 @@ async def _handle_submit_order(
         return _json({"error": "No broker configured. Cannot submit orders."})
 
     symbol: str = args["symbol"]
-    side = Side(args["side"])
     quantity = Decimal(str(args["quantity"]))
-    order_type = OrderType(args.get("order_type", "market"))
 
-    asset = Asset(symbol=symbol.upper(), asset_class=AssetClass.EQUITY)
+    # Validate side and order_type eagerly so bad values fail at stage time
+    Side(args["side"])
+    OrderType(args.get("order_type", "market"))
+
+    if quantity <= 0 or not quantity.is_finite():
+        return _json({"error": "Quantity must be a positive finite number"})
+    if quantity > Decimal("1000000"):
+        return _json({"error": "Quantity exceeds maximum (1,000,000)"})
+
+    # Stage the order for confirmation instead of executing immediately
+    pending = {
+        "symbol": symbol.upper(),
+        "side": args["side"],
+        "quantity": str(quantity),
+        "order_type": args.get("order_type", "market"),
+    }
+    ctx._pending_order = pending
+
+    return _json(
+        {
+            "status": "staged",
+            "message": "Order staged. Call confirm_order to execute.",
+            "order": pending,
+        }
+    )
+
+
+async def _handle_confirm_order(
+    ctx: AgentContext,
+    args: dict[str, Any],
+) -> str:
+    """Execute a previously staged order."""
+    if ctx.broker is None:
+        return _json({"error": "No broker configured. Cannot submit orders."})
+
+    if ctx._pending_order is None:
+        return _json({"error": "No pending order to confirm. Use submit_order first."})
+
+    pending = ctx._pending_order
+    ctx._pending_order = None
+
+    symbol = pending["symbol"]
+    side = Side(pending["side"])
+    quantity = Decimal(pending["quantity"])
+    order_type = OrderType(pending["order_type"])
+
+    asset = Asset(symbol=symbol, asset_class=AssetClass.EQUITY)
     order = Order(
         asset=asset,
         side=side,
@@ -400,7 +460,7 @@ async def _handle_submit_order(
     )
 
     logger.info(
-        "submit_order",
+        "confirm_order",
         symbol=symbol,
         side=side,
         quantity=str(quantity),
@@ -429,7 +489,7 @@ async def _handle_submit_order(
         {
             "status": "filled",
             "order_id": order.id,
-            "symbol": symbol.upper(),
+            "symbol": symbol,
             "side": str(fill.side),
             "quantity": str(fill.quantity),
             "fill_price": str(fill.price),
@@ -473,6 +533,7 @@ _HANDLERS: dict[str, Any] = {
     "analyze_technical": _handle_analyze_technical,
     "run_backtest": _handle_run_backtest,
     "submit_order": _handle_submit_order,
+    "confirm_order": _handle_confirm_order,
     "get_risk_report": _handle_get_risk_report,
     "list_strategies": _handle_list_strategies,
 }

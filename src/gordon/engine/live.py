@@ -30,6 +30,7 @@ if TYPE_CHECKING:
     from gordon.core.models import Asset, Fill, Order
     from gordon.core.protocols import BrokerProtocol, DataFeedProtocol
     from gordon.persistence.store import TradeStore
+    from gordon.risk.manager import RiskManager
     from gordon.strategy.base import Strategy
 
 logger = structlog.get_logger()
@@ -51,6 +52,8 @@ class LiveEngine:
         initial_cash: Decimal = Decimal("100000"),
         poll_interval: float = 60.0,
         store: TradeStore | None = None,
+        risk_manager: RiskManager | None = None,
+        confirm_live: bool = False,
     ) -> None:
         self._strategies = strategies
         self._assets = assets
@@ -60,6 +63,8 @@ class LiveEngine:
         self._initial_cash = initial_cash
         self._poll_interval = poll_interval
         self._store = store
+        self._risk_manager = risk_manager
+        self._confirmed = confirm_live
         self._running = False
 
     # ------------------------------------------------------------------
@@ -68,6 +73,11 @@ class LiveEngine:
 
     async def run(self) -> None:
         """Run the live trading loop until stopped."""
+        if not self._confirmed:
+            raise RuntimeError(
+                "Live trading requires explicit confirmation. "
+                "Pass confirm_live=True to the constructor."
+            )
         self._running = True
 
         bus = EventBus()
@@ -105,7 +115,7 @@ class LiveEngine:
                     signals = evaluate_strategies(self._strategies, asset, bar, portfolio)
 
                     for sig in signals:
-                        order = signal_to_order(sig, portfolio, close_price)
+                        order = signal_to_order(sig, portfolio, close_price, self._risk_manager)
                         if order is None:
                             continue
                         fill = await self._submit_and_track(order, tracker, bus, now)

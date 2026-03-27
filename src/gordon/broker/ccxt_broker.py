@@ -41,11 +41,15 @@ class CCXTBroker:
                 "ccxt is required for CCXTBroker. Install it with: pip install ccxt"
             ) from exc
 
-        exchange_cls = getattr(ccxt, exchange, None)
-        if exchange_cls is None:
-            raise BrokerError(f"Unsupported CCXT exchange: {exchange}")
+        if exchange not in ccxt.exchanges:
+            raise BrokerError(
+                f"Unknown exchange: {exchange}. Valid: {', '.join(ccxt.exchanges[:10])}..."
+            )
+        exchange_cls = getattr(ccxt, exchange)
 
-        config: dict[str, Any] = {}
+        config: dict[str, Any] = {
+            "enableRateLimit": True,
+        }
         if api_key:
             config["apiKey"] = api_key
         if api_secret:

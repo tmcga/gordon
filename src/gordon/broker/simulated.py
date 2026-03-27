@@ -140,6 +140,9 @@ class SimulatedBroker:
 
     async def submit_order(self, order: Order) -> Fill | None:
         """Fill the order at current price + slippage. Returns the Fill or None."""
+        if order.quantity <= 0:
+            raise OrderRejectedError("Order quantity must be positive", order_id=order.id)
+
         symbol = order.asset.symbol
         current_price = self._current_prices.get(symbol)
         if current_price is None:

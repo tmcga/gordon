@@ -1,0 +1,75 @@
+"""Core domain primitives — models, enums, events, errors, and protocols."""
+
+from gordon.core.enums import (
+    AssetClass,
+    Interval,
+    OrderStatus,
+    OrderType,
+    Side,
+    SignalType,
+    TimeInForce,
+)
+from gordon.core.errors import (
+    BrokerError,
+    ConfigError,
+    DataError,
+    GordonError,
+    InsufficientDataError,
+    OrderRejectedError,
+    StrategyError,
+)
+from gordon.core.events import Event, FillEvent, MarketEvent, OrderEvent, SignalEvent
+from gordon.core.models import (
+    Asset,
+    Bar,
+    Fill,
+    Order,
+    OrderUpdate,
+    PortfolioSnapshot,
+    Position,
+    Signal,
+    TradeRecord,
+)
+from gordon.core.protocols import (
+    BrokerProtocol,
+    DataFeedProtocol,
+    RiskGuardProtocol,
+    RiskVerdict,
+    StrategyProtocol,
+)
+
+__all__ = [
+    "Asset",
+    "AssetClass",
+    "Bar",
+    "BrokerError",
+    "BrokerProtocol",
+    "ConfigError",
+    "DataError",
+    "DataFeedProtocol",
+    "Event",
+    "Fill",
+    "FillEvent",
+    "GordonError",
+    "InsufficientDataError",
+    "Interval",
+    "MarketEvent",
+    "Order",
+    "OrderEvent",
+    "OrderRejectedError",
+    "OrderStatus",
+    "OrderType",
+    "OrderUpdate",
+    "PortfolioSnapshot",
+    "Position",
+    "RiskGuardProtocol",
+    "RiskVerdict",
+    "Side",
+    "Signal",
+    "SignalEvent",
+    "SignalType",
+    "StrategyError",
+    "StrategyProtocol",
+    "TimeInForce",
+    "TradeRecord",
+]

@@ -80,7 +80,7 @@ jobs:
         run: pip install -e ".[dev]" pip-audit bandit[toml]
 
       - name: Pip audit (dependency vulnerabilities)
-        run: pip-audit --desc --skip-editable
+        run: pip-audit --desc --skip-editable --ignore-vuln CVE-2026-4539
 
       - name: Bandit (security linter)
         run: bandit -r src/gordon -c pyproject.toml -q

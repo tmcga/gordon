@@ -128,7 +128,7 @@ class BaseDataFeed(ABC):
         end: datetime | None,
     ) -> str:
         raw = f"{asset.symbol}|{asset.asset_class}|{interval}|{start.isoformat()}|{end}"
-        return hashlib.md5(raw.encode()).hexdigest()
+        return hashlib.md5(raw.encode(), usedforsecurity=False).hexdigest()
 
     def clear_cache(self) -> None:
         """Drop all cached data."""

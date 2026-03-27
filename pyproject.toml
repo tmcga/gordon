@@ -136,4 +136,4 @@ exclude_lines = [
 
 [tool.bandit]
 exclude_dirs = ["tests"]
-skips = ["B101"]  # assert is fine in non-production code
+skips = ["B101", "B107"]  # B101: assert ok; B107: empty default passwords are env-overridden

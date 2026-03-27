@@ -39,8 +39,8 @@ Thumbs.db
 .env
 .env.local
 
-# Data (user-generated)
-data/
+# Data (user-generated, root level only)
+/data/
 *.parquet
 *.db
 *.sqlite

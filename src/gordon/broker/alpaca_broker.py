@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import asyncio
 from datetime import UTC, datetime
 from decimal import Decimal
-from typing import TYPE_CHECKING
+from functools import partial
+from typing import TYPE_CHECKING, Any, TypeVar
 
 import structlog
 
@@ -13,22 +15,13 @@ from gordon.core.errors import BrokerError, OrderRejectedError
 from gordon.core.models import Asset, Fill, Position
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from gordon.core.models import Order
 
 logger = structlog.get_logger()
 
-# Alpaca enums are mapped at module level to keep methods concise.
-_SIDE_MAP: dict[Side, str] = {
-    Side.BUY: "buy",
-    Side.SELL: "sell",
-}
-
-_ORDER_TYPE_MAP: dict[OrderType, str] = {
-    OrderType.MARKET: "market",
-    OrderType.LIMIT: "limit",
-    OrderType.STOP: "stop",
-    OrderType.STOP_LIMIT: "stop_limit",
-}
+T = TypeVar("T")
 
 _TIF_MAP: dict[TimeInForce, str] = {
     TimeInForce.GTC: "gtc",
@@ -70,9 +63,14 @@ class AlpacaBroker:
             secret_key=api_secret,
             paper=paper,
         )
-        self._paper = paper
 
         logger.info("alpaca_broker_init", paper=paper)
+
+    # -- Async helper ------------------------------------------------------
+
+    async def _run_sync(self, fn: Callable[..., T], *args: Any) -> T:
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, partial(fn, *args))
 
     # -- Order management --------------------------------------------------
 
@@ -93,7 +91,7 @@ class AlpacaBroker:
                 StopOrderRequest,
                 StopLimitOrderRequest,
             )
-            result = self._client.submit_order(request)
+            result = await self._run_sync(self._client.submit_order, request)
         except Exception as exc:
             msg = f"Alpaca order submission failed: {exc}"
             logger.error("alpaca_order_error", error=str(exc), order_id=order.id)
@@ -126,7 +124,7 @@ class AlpacaBroker:
     async def cancel_order(self, order_id: str) -> bool:
         """Cancel an open order on Alpaca."""
         try:
-            self._client.cancel_order_by_id(order_id)
+            await self._run_sync(self._client.cancel_order_by_id, order_id)
             logger.info("alpaca_order_cancelled", order_id=order_id)
             return True
         except Exception as exc:
@@ -140,7 +138,7 @@ class AlpacaBroker:
     async def get_positions(self) -> list[Position]:
         """Fetch current positions from Alpaca."""
         try:
-            alpaca_positions = self._client.get_all_positions()
+            alpaca_positions = await self._run_sync(self._client.get_all_positions)
         except Exception as exc:
             raise BrokerError(f"Failed to fetch Alpaca positions: {exc}") from exc
 
@@ -173,7 +171,7 @@ class AlpacaBroker:
                 after=since,
                 limit=100,
             )
-            orders = self._client.get_orders(params)
+            orders = await self._run_sync(self._client.get_orders, params)
         except Exception as exc:
             raise BrokerError(f"Failed to fetch Alpaca fills: {exc}") from exc
 
@@ -212,7 +210,7 @@ class AlpacaBroker:
         common = {
             "symbol": order.asset.symbol,
             "qty": float(order.quantity),
-            "side": _SIDE_MAP[order.side],
+            "side": order.side.value,
             "time_in_force": _TIF_MAP.get(order.time_in_force, "gtc"),
         }
 

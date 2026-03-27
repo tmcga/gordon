@@ -56,7 +56,6 @@ class CCXTBroker:
             self._exchange.set_sandbox_mode(True)
 
         self._exchange_name = exchange
-        self._sandbox = sandbox
 
         logger.info(
             "ccxt_broker_init",

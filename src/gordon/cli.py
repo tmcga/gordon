@@ -333,7 +333,7 @@ def live(
         strategies=[strat],
         assets=assets,
         data_feed=feed_obj,  # type: ignore[arg-type]
-        broker=broker_obj,  # type: ignore[arg-type]
+        broker=broker_obj,
         interval=iv,
         initial_cash=Decimal(str(cash)),
         poll_interval=poll,

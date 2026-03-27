@@ -15,13 +15,19 @@ import structlog
 from gordon.broker.simulated import CommissionModel, SimulatedBroker, SlippageModel
 from gordon.core.enums import Interval
 from gordon.core.events import FillEvent, MarketEvent
-from gordon.engine._helpers import close_positions, signal_to_order
+from gordon.engine._helpers import (
+    close_positions,
+    evaluate_strategies,
+    fetch_latest_bar,
+    persist_fill,
+    signal_to_order,
+)
 from gordon.engine.clock import WallClock
 from gordon.engine.event_bus import EventBus
 from gordon.portfolio.tracker import PortfolioTracker
 
 if TYPE_CHECKING:
-    from gordon.core.models import Asset, Bar, Fill, Signal
+    from gordon.core.models import Asset
     from gordon.core.protocols import DataFeedProtocol
     from gordon.persistence.store import TradeStore
     from gordon.strategy.base import Strategy
@@ -80,7 +86,7 @@ class PaperEngine:
             commission=self._commission,
         )
         tracker = PortfolioTracker(initial_cash=self._initial_cash)
-        all_fills: list[Fill] = []
+        fill_count: int = 0
 
         logger.info(
             "paper_engine_start",
@@ -98,7 +104,7 @@ class PaperEngine:
                 now = clock.now()
 
                 for asset in self._assets:
-                    bar = await self._fetch_latest_bar(asset)
+                    bar = await fetch_latest_bar(self._data_feed, asset, self._interval)
                     if bar is None:
                         continue
 
@@ -114,17 +120,7 @@ class PaperEngine:
                     portfolio = tracker.snapshot(now)
 
                     # Evaluate strategies
-                    signals: list[Signal] = []
-                    for strat in self._strategies:
-                        try:
-                            sigs = strat.on_bar(asset, bar, portfolio)
-                            signals.extend(sigs)
-                        except Exception:
-                            logger.exception(
-                                "strategy_error",
-                                strategy=strat.strategy_id,
-                                asset=str(asset),
-                            )
+                    signals = evaluate_strategies(self._strategies, asset, bar, portfolio)
 
                     # Convert signals to orders and submit
                     for sig in signals:
@@ -133,10 +129,10 @@ class PaperEngine:
                             continue
                         fill = await broker.submit_order(order)
                         if fill is not None:
-                            all_fills.append(fill)
+                            fill_count += 1
                             tracker.on_fill(fill)
                             await bus.emit(FillEvent(timestamp=now, fill=fill))
-                            self._persist_fill(fill, sig.strategy_id)
+                            persist_fill(self._store, fill, sig.strategy_id)
 
                 await asyncio.sleep(self._poll_interval)
 
@@ -144,9 +140,9 @@ class PaperEngine:
             # Close all open positions
             logger.info("paper_engine_closing_positions")
             closing_fills = await close_positions(broker, tracker, bus)
-            all_fills.extend(closing_fills)
+            fill_count += len(closing_fills)
             for cfill in closing_fills:
-                self._persist_fill(cfill)
+                persist_fill(self._store, cfill)
 
             # Notify strategies
             for strat in self._strategies:
@@ -158,10 +154,11 @@ class PaperEngine:
                 self._store.record_snapshot(snapshot)
                 for trade in tracker.trade_records:
                     self._store.record_trade(trade)
+                self._store.close()
 
             logger.info(
                 "paper_engine_stopped",
-                total_fills=len(all_fills),
+                total_fills=fill_count,
                 final_equity=str(tracker.total_equity),
             )
 
@@ -169,48 +166,3 @@ class PaperEngine:
         """Signal the engine to stop gracefully."""
         logger.info("paper_engine_stop_requested")
         self._running = False
-
-    # ------------------------------------------------------------------
-    # Internals
-    # ------------------------------------------------------------------
-
-    async def _fetch_latest_bar(self, asset: Asset) -> Bar | None:
-        """Fetch the most recent bar from the data feed."""
-        try:
-            df = await self._data_feed.get_bars(
-                asset=asset,
-                interval=self._interval,
-                start=WallClock().now(),
-                end=None,
-            )
-            if df is None or df.empty:
-                return None
-
-            from gordon.core.models import Bar as BarModel
-
-            row = df.iloc[-1]
-            ts = df.index[-1]
-            import pandas as pd
-
-            timestamp = pd.Timestamp(ts).to_pydatetime()
-            return BarModel(
-                asset=asset,
-                timestamp=timestamp,
-                open=Decimal(str(row["open"])),
-                high=Decimal(str(row["high"])),
-                low=Decimal(str(row["low"])),
-                close=Decimal(str(row["close"])),
-                volume=Decimal(str(row.get("volume", 0))),
-                interval=self._interval,
-            )
-        except Exception:
-            logger.exception("data_feed_error", asset=str(asset))
-            return None
-
-    def _persist_fill(self, fill: Fill, strategy_id: str = "") -> None:
-        """Persist a fill to the store if configured."""
-        if self._store is not None:
-            try:
-                self._store.record_fill(fill, strategy_id)
-            except Exception:
-                logger.exception("store_error", fill_id=fill.order_id)

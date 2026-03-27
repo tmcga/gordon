@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-import logging
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
+import structlog
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 
@@ -16,7 +16,7 @@ from gordon.persistence.models import Base, FillRecord, SnapshotRecord, TradeLog
 if TYPE_CHECKING:
     from datetime import datetime
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class TradeStore:

@@ -219,6 +219,82 @@ def backtest(
 
 
 @app.command()
+def optimize(
+    symbols: Annotated[
+        str, typer.Option("--symbols", help="Comma-separated symbols.")
+    ] = "AAPL,MSFT,GOOG,AMZN",
+    method: Annotated[
+        str, typer.Option("--method", "-m", help="Optimization method.")
+    ] = "mean-variance",
+    start: Annotated[str, typer.Option("--start", "-s", help="Start date.")] = "2023-01-01",
+    end: Annotated[str | None, typer.Option("--end", "-e", help="End date.")] = None,
+    risk_free_rate: Annotated[float, typer.Option("--rfr", help="Risk-free rate.")] = 0.05,
+) -> None:
+    """Optimize portfolio allocation across assets."""
+    import asyncio
+
+    from rich.console import Console
+    from rich.table import Table
+
+    from gordon.data.providers import YFinanceDataFeed
+    from gordon.portfolio.optimizer import (
+        BlackLittermanOptimizer,
+        MeanVarianceOptimizer,
+        RiskParityOptimizer,
+    )
+
+    console = Console()
+    symbol_list = [s.strip() for s in symbols.split(",")]
+
+    start_dt = datetime.strptime(start, "%Y-%m-%d")
+    end_dt = datetime.strptime(end, "%Y-%m-%d") if end else None
+
+    feed = YFinanceDataFeed()
+    with console.status("[bold]Fetching returns data..."):
+        import pandas as pd
+
+        frames: dict[str, pd.Series] = {}
+        for sym in symbol_list:
+            asset = Asset(symbol=sym, asset_class=AssetClass.EQUITY)
+            df = asyncio.run(feed.get_bars(asset, Interval.D1, start_dt, end_dt))
+            close = df["close"].astype(float)
+            frames[sym] = close.pct_change().dropna()
+
+        returns = pd.DataFrame(frames).dropna()
+
+    if returns.empty or len(returns) < 5:
+        rprint("[red]Insufficient data for optimization.[/red]")
+        raise typer.Exit(code=1)
+
+    with console.status("[bold]Optimizing..."):
+        if method == "mean-variance":
+            result = MeanVarianceOptimizer().optimize(returns, risk_free_rate=risk_free_rate)
+        elif method == "risk-parity":
+            result = RiskParityOptimizer().optimize(returns)
+        elif method == "black-litterman":
+            result = BlackLittermanOptimizer().optimize(returns, risk_free_rate=risk_free_rate)
+        else:
+            rprint(f"[red]Unknown method:[/red] {method}")
+            raise typer.Exit(code=1)
+
+    console.print()
+    table = Table(title=f"Optimal Allocation ({method})", show_lines=True)
+    table.add_column("Asset", style="cyan")
+    table.add_column("Weight", style="bold", justify="right")
+
+    for sym, weight in sorted(result.weights.items(), key=lambda x: x[1], reverse=True):
+        table.add_row(sym, f"{weight:.1%}")
+
+    console.print(table)
+    console.print()
+    console.print(
+        f"Expected Return: {result.expected_return:.2%}  |  "
+        f"Risk: {result.expected_risk:.2%}  |  "
+        f"Sharpe: {result.sharpe_ratio:.3f}"
+    )
+
+
+@app.command()
 def paper(
     strategy: Annotated[
         str, typer.Option("--strategy", "-S", help="Strategy name.")
